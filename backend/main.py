@@ -79,3 +79,84 @@ async def tradingview(payload: TradingViewEvent, request: Request):
 @app.get("/signals/recent")
 def recent_signals():
     return {"source": "TradingView alert webhooks", "storage": "volatile", "signals": list(_events), "execution": "disabled"}
+
+
+# Public, source-attributed macro calendar. No trading-price data.
+from urllib.request import Request as URLRequest, urlopen
+from xml.etree import ElementTree as ET
+from datetime import timedelta
+from zoneinfo import ZoneInfo
+from concurrent.futures import ThreadPoolExecutor
+_macro_cache = {"until": 0, "value": None}
+def _fetch_public(url):
+    with urlopen(URLRequest(url, headers={"User-Agent": "FuturesIntelligenceHub/0.3 (economic-calendar-reader)", "Accept": "text/calendar, application/rss+xml, application/xml"}), timeout=7) as response:
+        return response.read(750000).decode("utf-8-sig", errors="replace")
+
+def _parse_bls_ics(raw):
+    # RFC 5545 line folding
+    lines = []
+    for line in raw.replace("\\r\\n", "\\n").split("\\n"):
+        if line.startswith((" ", "\\t")) and lines:
+            lines[-1] += line[1:]
+        else:
+            lines.append(line)
+    events, current = [], None
+    for line in lines:
+        if line == "BEGIN:VEVENT":
+            current = {}
+        elif line == "END:VEVENT" and current is not None:
+            events.append(current)
+            current = None
+        elif current is not None and ":" in line:
+            k, v = line.split(":", 1)
+            current[k.split(";", 1)[0]] = v.replace("\\,", ",").replace("\\n", " ")
+    now = datetime.now(ZoneInfo("America/New_York"))
+    output = []
+    for ev in events:
+        rawdate = ev.get("DTSTART", "")
+        try:
+            if rawdate.endswith("Z"):
+                dt = datetime.strptime(rawdate, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc).astimezone(ZoneInfo("America/New_York"))
+            elif "T" in rawdate:
+                dt = datetime.strptime(rawdate[:15], "%Y%m%dT%H%M%S").replace(tzinfo=ZoneInfo("America/New_York"))
+            else:
+                dt = datetime.strptime(rawdate[:8], "%Y%m%d").replace(tzinfo=ZoneInfo("America/New_York"))
+            if now - timedelta(hours=12) <= dt <= now + timedelta(days=14):
+                output.append({"title": ev.get("SUMMARY", "BLS economic release")[:160], "time_et": dt.isoformat(), "source": "U.S. Bureau of Labor Statistics", "url": "https://www.bls.gov/schedule/news_release/", "time_precision": "date" if "T" not in rawdate else "datetime"})
+        except (ValueError, IndexError):
+            continue
+    return sorted(output, key=lambda x: x["time_et"])[:35]
+
+def _parse_rss(raw, source):
+    root = ET.fromstring(raw)
+    items = []
+    for item in root.findall(".//item")[:8]:
+        title = item.findtext("title", "").strip()
+        link = item.findtext("link", "").strip()
+        published = item.findtext("pubDate", "").strip()
+        if title and link.startswith("https://"):
+            items.append({"title": title[:180], "url": link, "published": published, "source": source})
+    return items
+
+@app.get("/macro/brief")
+def macro_brief():
+    now = time.monotonic()
+    if _macro_cache["value"] is not None and now < _macro_cache["until"]:
+        return _macro_cache["value"]
+    tasks = {
+        "calendar": ("https://www.bls.gov/schedule/news_release/bls.ics", _parse_bls_ics),
+        "fed": ("https://www.federalreserve.gov/feeds/press_monetary.xml", lambda x: _parse_rss(x, "Federal Reserve")),
+        "bls": ("https://www.bls.gov/feed/bls_latest.rss", lambda x: _parse_rss(x, "BLS")),
+    }
+    results, errors = {}, []
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {name: pool.submit(_fetch_public, url) for name, (url, _) in tasks.items()}
+        for name, (_, parser) in tasks.items():
+            try:
+                results[name] = parser(futures[name].result(timeout=9))
+            except Exception:
+                results[name] = []
+                errors.append(name)
+    value = {"fetched_at": datetime.now(timezone.utc).isoformat(), "timezone": "America/New_York", "upcoming_bls": results["calendar"], "latest_releases": (results["fed"] + results["bls"])[:12], "unavailable_sources": errors, "disclaimer": "Official-source calendar and release headlines only. Verify schedules at source; not a complete market calendar, price feed or trading signal."}
+    _macro_cache.update(until=now+900, value=value)
+    return value
