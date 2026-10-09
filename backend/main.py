@@ -83,6 +83,7 @@ def recent_signals():
 
 # Public, source-attributed macro calendar. No trading-price data.
 from urllib.request import Request as URLRequest, urlopen
+from urllib.parse import quote
 from xml.etree import ElementTree as ET
 from datetime import timedelta
 from zoneinfo import ZoneInfo
@@ -130,7 +131,7 @@ def _parse_bls_ics(raw):
 def _parse_rss(raw, source):
     root = ET.fromstring(raw)
     items = []
-    for item in root.findall(".//item")[:8]:
+    for item in root.findall(".//item")[:20]:
         title = item.findtext("title", "").strip()
         link = item.findtext("link", "").strip()
         published = item.findtext("pubDate", "").strip()
@@ -144,6 +145,7 @@ def macro_brief():
     if _macro_cache["value"] is not None and now < _macro_cache["until"]:
         return _macro_cache["value"]
     tasks = {
+        "nq": ("https://news.google.com/rss/search?q=" + quote('("Nasdaq 100" OR "Nasdaq futures" OR "NQ futures" OR "US tech stocks") when:2d') + "&hl=en-US&gl=US&ceid=US:en", lambda x: _parse_rss(x, "Google News / publisher headlines")),
         "calendar": ("https://www.bls.gov/schedule/news_release/bls.ics", _parse_bls_ics),
         "fed": ("https://www.federalreserve.gov/feeds/press_monetary.xml", lambda x: _parse_rss(x, "Federal Reserve")),
         "bls": ("https://www.bls.gov/feed/bls_latest.rss", lambda x: _parse_rss(x, "BLS")),
@@ -157,6 +159,6 @@ def macro_brief():
             except Exception:
                 results[name] = []
                 errors.append(name)
-    value = {"fetched_at": datetime.now(timezone.utc).isoformat(), "timezone": "America/New_York", "upcoming_bls": results["calendar"], "latest_releases": (results["fed"] + results["bls"])[:12], "unavailable_sources": errors, "disclaimer": "Official-source calendar and release headlines only. Verify schedules at source; not a complete market calendar, price feed or trading signal."}
+    value = {"fetched_at": datetime.now(timezone.utc).isoformat(), "timezone": "America/New_York", "upcoming_bls": results["calendar"], "latest_releases": (results["fed"] + results["bls"])[:12], "nq_headlines": results["nq"][:20], "unavailable_sources": errors, "disclaimer": "Publisher headlines via Google News RSS plus official-source macro releases. News may be delayed or incomplete. Verify primary reporting; not a futures price feed or trading signal."}
     _macro_cache.update(until=now+900, value=value)
     return value
