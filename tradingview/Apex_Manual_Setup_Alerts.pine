@@ -1,0 +1,25 @@
+//@version=6
+indicator("Apex Intelligence | NQ Manual Setup Alerts v0.1", overlay=true, max_labels_count=200)
+
+// Research-only example. Not a validated trading strategy or order automation.
+// Use on a 5-minute NQ/MNQ chart. Higher-timeframe values are prior CLOSED bars.
+emaLen = input.int(50, "4H EMA length", minval=2)
+showLevels = input.bool(true, "Show prior closed 15m high/low")
+confirmClose = input.bool(true, "Require candle close")
+fourHClose = request.security(syminfo.tickerid, "240", close[1], lookahead=barmerge.lookahead_on)
+fourHEma = request.security(syminfo.tickerid, "240", ta.ema(close, emaLen)[1], lookahead=barmerge.lookahead_on)
+prev15High = request.security(syminfo.tickerid, "15", high[1], lookahead=barmerge.lookahead_on)
+prev15Low = request.security(syminfo.tickerid, "15", low[1], lookahead=barmerge.lookahead_on)
+bullBias = fourHClose > fourHEma
+bearBias = fourHClose < fourHEma
+barOK = not confirmClose or barstate.isconfirmed
+// Illustrative 5m wick sweep + close back inside the previous CLOSED 15m range.
+// Not equivalent to a validated liquidity-grab/FVG trading system.
+longSetup = barOK and bullBias and low < prev15Low and close > prev15Low and close > open
+shortSetup = barOK and bearBias and high > prev15High and close < prev15High and close < open
+plot(showLevels ? prev15High : na, "Prior closed 15m high", color=color.new(color.orange, 40), style=plot.style_stepline)
+plot(showLevels ? prev15Low : na, "Prior closed 15m low", color=color.new(color.aqua, 40), style=plot.style_stepline)
+plotshape(longSetup, title="Bullish sweep reclaim", style=shape.labelup, location=location.belowbar, color=color.new(color.teal, 0), text="AI LONG?", textcolor=color.white, size=size.tiny)
+plotshape(shortSetup, title="Bearish sweep reject", style=shape.labeldown, location=location.abovebar, color=color.new(color.purple, 0), text="AI SHORT?", textcolor=color.white, size=size.tiny)
+alertcondition(longSetup, title="Apex LONG_SETUP", message='{"secret":"REPLACE_WITH_RAILWAY_SECRET","symbol":"{{ticker}}","timeframe":"{{interval}}","event":"LONG_SETUP","price":{{close}},"bar_time":"{{time}}","event_id":"{{ticker}}-{{interval}}-{{time}}-LONG_SETUP"}')
+alertcondition(shortSetup, title="Apex SHORT_SETUP", message='{"secret":"REPLACE_WITH_RAILWAY_SECRET","symbol":"{{ticker}}","timeframe":"{{interval}}","event":"SHORT_SETUP","price":{{close}},"bar_time":"{{time}}","event_id":"{{ticker}}-{{interval}}-{{time}}-SHORT_SETUP"}')
