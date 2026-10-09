@@ -1,0 +1,44 @@
+//@version=6
+indicator("Apex Intelligence | Setup Radar v0.2", overlay=true, max_labels_count=200)
+// Research-only, manual execution. Intended for 5-minute NQ/MNQ charts.
+// Prior closed HTF bars prevent HTF lookahead; current 5m preview may change before close.
+emaLen = input.int(50, "4H EMA length", minval=2)
+nearPts = input.float(15.0, "Approaching 15m level (NQ points)", minval=0.25, step=0.25)
+showLevels = input.bool(true, "Plot prior closed 15m levels")
+c4 = request.security(syminfo.tickerid, "240", close[1], lookahead=barmerge.lookahead_on)
+e4 = request.security(syminfo.tickerid, "240", ta.ema(close, emaLen)[1], lookahead=barmerge.lookahead_on)
+c1 = request.security(syminfo.tickerid, "60", close[1], lookahead=barmerge.lookahead_on)
+e1 = request.security(syminfo.tickerid, "60", ta.ema(close, emaLen)[1], lookahead=barmerge.lookahead_on)
+h15 = request.security(syminfo.tickerid, "15", high[1], lookahead=barmerge.lookahead_on)
+l15 = request.security(syminfo.tickerid, "15", low[1], lookahead=barmerge.lookahead_on)
+bull = c4 > e4 and c1 > e1
+bear = c4 < e4 and c1 < e1
+// Approach is only a proximity alert, NOT a prediction that price will reverse.
+nearLow = bull and close >= l15 and close - l15 <= nearPts
+nearHigh = bear and close <= h15 and h15 - close <= nearPts
+// Sweep preview can appear intrabar and disappear before close.
+previewLong = bull and low < l15 and close > l15
+previewShort = bear and high > h15 and close < h15
+confirmLong = barstate.isconfirmed and previewLong and close > open
+confirmShort = barstate.isconfirmed and previewShort and close < open
+plot(showLevels ? h15 : na, "Previous closed 15m high", color=color.orange, style=plot.style_stepline)
+plot(showLevels ? l15 : na, "Previous closed 15m low", color=color.aqua, style=plot.style_stepline)
+plotshape(nearLow and barstate.isconfirmed, "Bullish area approaching", shape.circle, location.belowbar, color=color.yellow, size=size.tiny)
+plotshape(nearHigh and barstate.isconfirmed, "Bearish area approaching", shape.circle, location.abovebar, color=color.yellow, size=size.tiny)
+plotshape(confirmLong, "Confirmed bullish reclaim", shape.labelup, location.belowbar, color=color.teal, text="RECLAIM?", textcolor=color.white, size=size.tiny)
+plotshape(confirmShort, "Confirmed bearish rejection", shape.labeldown, location.abovebar, color=color.purple, text="REJECT?", textcolor=color.white, size=size.tiny)
+// Create TradingView alerts with "Any alert() function call" and set the webhook URL.
+// Replace the placeholder using the indicator's settings after adding to chart.
+// NOTE: TradingView input values can be viewed by anyone with chart access.
+secret = input.string("", "Webhook secret (Railway)", confirm=true)
+sendEvent(ev) =>
+    '{"secret":"' + secret + '","symbol":"' + syminfo.ticker + '","timeframe":"' + timeframe.period + '","event":"' + ev + '","price":' + str.tostring(close) + ',"bar_time":"' + str.tostring(time) + '","event_id":"' + syminfo.ticker + '-' + timeframe.period + '-' + str.tostring(time) + '-' + ev + '"}'
+if timeframe.period == "5" and secret != ""
+    if barstate.isconfirmed and nearLow and not nearLow[1]
+        alert(sendEvent("SWEEP"), alert.freq_once_per_bar_close)
+    if barstate.isconfirmed and nearHigh and not nearHigh[1]
+        alert(sendEvent("VWAP"), alert.freq_once_per_bar_close)
+    if confirmLong
+        alert(sendEvent("LONG_SETUP"), alert.freq_once_per_bar_close)
+    if confirmShort
+        alert(sendEvent("SHORT_SETUP"), alert.freq_once_per_bar_close)
