@@ -35,9 +35,9 @@ sendEvent(ev) =>
     '{"secret":"' + secret + '","symbol":"' + syminfo.ticker + '","timeframe":"' + timeframe.period + '","event":"' + ev + '","price":' + str.tostring(close) + ',"bar_time":"' + str.tostring(time) + '","event_id":"' + syminfo.ticker + '-' + timeframe.period + '-' + str.tostring(time) + '-' + ev + '"}'
 if timeframe.period == "5" and secret != ""
     if barstate.isconfirmed and nearLow and not nearLow[1]
-        alert(sendEvent("SWEEP"), alert.freq_once_per_bar_close)
+        alert(sendEvent("APPROACH_LOW"), alert.freq_once_per_bar_close)
     if barstate.isconfirmed and nearHigh and not nearHigh[1]
-        alert(sendEvent("VWAP"), alert.freq_once_per_bar_close)
+        alert(sendEvent("APPROACH_HIGH"), alert.freq_once_per_bar_close)
     if confirmLong
         alert(sendEvent("LONG_SETUP"), alert.freq_once_per_bar_close)
     if confirmShort
