@@ -14,7 +14,7 @@ origins = [x.strip() for x in os.getenv("ALLOWED_ORIGINS", "http://localhost:300
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 _events = deque(maxlen=50)  # temporary memory; reset on restart or scale-out
 _recent_ids = {}
-_allowed_actions = {"SWEEP", "RECLAIM", "BREAKOUT", "FVG", "VWAP", "LONG_SETUP", "SHORT_SETUP", "BIAS_BULL", "BIAS_BEAR", "CONFIRMATION", "INVALIDATION"}
+_allowed_actions = {"SWEEP", "RECLAIM", "BREAKOUT", "FVG", "VWAP", "LONG_SETUP", "SHORT_SETUP", "BIAS_BULL", "BIAS_BEAR", "CONFIRMATION", "INVALIDATION", "APPROACH_LOW", "APPROACH_HIGH"}
 _allowed_tf = {"1", "3", "5", "15", "60", "240", "D"}
 
 class RiskRequest(BaseModel):
