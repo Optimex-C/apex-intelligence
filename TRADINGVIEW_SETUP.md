@@ -31,3 +31,20 @@ Supported event labels: `SWEEP`, `RECLAIM`, `BREAKOUT`, `FVG`, `VWAP`, `LONG_SET
 - The event feed is publicly readable at `GET /signals/recent`. Do not include personal or account information in alert messages. Authentication and persistent storage are required before handling private trading data.
 - The backend accepts only authenticated NQ/MNQ event messages. Rotate the shared secret if compromised.
 - TradingView webhooks may require a qualifying subscription, two-factor authentication, and successful public HTTPS access; check current TradingView requirements in your account.
+
+
+## For manual TradingView + Tradovate traders
+An initial Pine Script indicator is in [tradingview/Apex_Manual_Setup_Alerts.pine](tradingview/Apex_Manual_Setup_Alerts.pine). This is **not a proven strategy**. It watches the prior *closed* 4h EMA bias and looks for a 5m wick sweep/reclaim of the prior *closed* 15m high/low.
+
+1. Open your NQ or MNQ chart on TradingView and choose the **5-minute** timeframe.
+2. Open **Pine Editor**, paste the entire indicator code, **Save**, and **Add to chart**.
+3. Choose **Create alert** and select this indicator's `Apex LONG_SETUP` condition. Use **Once Per Bar Close**.
+4. Enable the **Webhook URL** and enter the endpoint at the top of this guide.
+5. In the alert **Message**, replace `REPLACE_WITH_RAILWAY_SECRET` with the secret found in your Railway backend service's Variables tab. TradingView might prepopulate the JSON message; verify that it remains valid JSON.
+6. Create a second alert using `Apex SHORT_SETUP` and the same webhook URL.
+7. Confirm the event appears on the Apex Intelligence website. **Neither TradingView nor the website will place trades** through these alerts.
+
+Do not publish an indicator containing the secret. Store your TradingView account and alert configuration securely. An indicator added to a chart is not automatically connected until you explicitly create the alerts.
+
+### Tradovate/Apex account data
+The existing TradingView Trading Panel connection is for chart-based trading and does not grant this app Tradovate API authorization. Position, fills, P&L and account-rule data are **not connected**. A separate, authorized read-only integration (if your account and vendor permissions allow it) is required. Do not send credentials or API tokens in chat or GitHub.
